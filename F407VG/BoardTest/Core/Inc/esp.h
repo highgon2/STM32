@@ -7,7 +7,6 @@
 #define MAX_ESP_COMMAND_LEN    64
 
 int drv_esp_init(void);
-int drv_esp_reset(void);
 int drv_esp_test_command(void);
 
 #endif
