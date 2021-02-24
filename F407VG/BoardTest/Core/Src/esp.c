@@ -1,17 +1,19 @@
 #include <stdio.h>
 #include <string.h>
+#include <json_parser.h>
 
 #include "esp.h"
 #include "uart.h"
+#include "board.h"
 
 typedef struct _cb_data_t
 {
-    uint8_t buf[MAX_UART_RX_BUFFER+1];
+    uint8_t buf[MAX_UART_RX_BUFFER];
     uint16_t length;
 }cb_data_t;
 
 static char ip_addr[16];
-static char response[MAX_UART_RX_BUFFER+1];
+static char response[MAX_UART_RX_BUFFER];
 
 static uint8_t data;
 static uint8_t is_run;
@@ -21,7 +23,7 @@ UART_HandleTypeDef huart3;
 static int esp_at_command(uint8_t *cmd, uint8_t *resp, uint16_t *length, int16_t time_out)
 {
     *length = 0;
-    memset(resp, 0x00, MAX_UART_RX_BUFFER+1);
+    memset(resp, 0x00, MAX_UART_RX_BUFFER);
     memset(&cb_data, 0x00, sizeof(cb_data_t));
     if(HAL_UART_Transmit(&huart3, cmd, strlen((char *)cmd), 100) != HAL_OK)
         return -1;
@@ -141,21 +143,47 @@ static int request_ip_addr(uint8_t is_debug)
     return -1;
 }
 
+static int get_board_state(char *json)
+{
+    board_info_t board;
+
+    memset(&board, 0x00, sizeof(board_info_t));
+    for(int i = 0 ; i < MAX_LED_NUM ; i++)
+    {
+        uint16_t gpio_pin;
+        led_info_t *led_info = &board.led_list[i];
+
+        switch(i)
+        {
+            case 0: gpio_pin = GPIO_PIN_12; break;
+            case 1: gpio_pin = GPIO_PIN_13; break;
+            case 2: gpio_pin = GPIO_PIN_14; break;
+            case 3: gpio_pin = GPIO_PIN_15; break;
+        }
+        sprintf(led_info->label, "LED %d", i+1);
+        led_info->state = HAL_GPIO_ReadPin(GPIOD, gpio_pin);
+    }
+
+    if(make_json_board_state(json, (void *)&board) != 0)
+        return -1;
+
+    return 0;
+}
+
 static int start_esp_server(void)
 {
     uint16_t length = 0;
+
     if(esp_get_ip_addr(0) != 0)
     {
         int ret, retry = 0;
         while((ret = request_ip_addr(0)) != 0)
         {
-            if(retry++ > 4)
-                break;
+            if(retry++ > 4) break;
             HAL_Delay(1000);
         }
 
-        if(ret != 0)
-            return -1;
+        if(ret != 0) return -1;
     }
 
     if(esp_at_command((uint8_t *)"AT+CIPMUX=1\r\n", (uint8_t *)response, &length, 1000) != 0)
@@ -171,8 +199,8 @@ static int start_esp_server(void)
     }
 
     printf("ESP Server Start : IP = %s, Port = 3079\r\n", ip_addr);
-    is_run = 1;
     memset(&cb_data, 0x00, sizeof(cb_data_t));
+    is_run = 1;
 
     while(is_run)
     {
@@ -181,9 +209,27 @@ static int start_esp_server(void)
             HAL_Delay(50);    
             continue;
         }
+
         printf("%s", cb_data.buf);
+        if(strstr((char *)cb_data.buf, "CONNECT") != NULL)
+        {
+            char send_message[256];
+
+            memset(send_message, 0x00, sizeof(send_message));
+            if(get_board_state(send_message) == 0)
+                printf("send_message = %s", send_message);
+            else
+                printf("get_board_state() fail\r\n");
+        }
+        else if(strstr((char *)cb_data.buf, "CLOSED") != NULL)
+        {
+        }
+        else if(strstr((char *)cb_data.buf, "JSON") != NULL)
+        {
+        }
+
         memset(&cb_data, 0x00, sizeof(cb_data_t));
-        HAL_Delay(500);
+        HAL_Delay(100);
     }
     printf("ESP Server Stop...");
     return 0;
@@ -307,6 +353,8 @@ int drv_esp_test_command(void)
             {
                 for(int i = 0 ; i < length ; i++)
                     printf("%c", response[i]);
+
+                memset(ip_addr, 0x00, sizeof(ip_addr));
             }
         }
         else if(strcmp(command, "ip_state") == 0)
@@ -359,10 +407,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if(huart->Instance == USART3)
     {
-        if(cb_data.length < MAX_UART_RX_BUFFER)
+        if(cb_data.length < MAX_ESP_RX_BUFFER)
             cb_data.buf[cb_data.length++] = data;
         else
-            HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+            HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_15);
         HAL_UART_Receive_IT(huart, &data, 1);
     }
 }

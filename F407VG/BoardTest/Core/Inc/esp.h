@@ -3,7 +3,7 @@
 
 #include "stm32f4xx_hal.h"
 
-#define MAX_ESP_RX_BUFFER      511
+#define MAX_ESP_RX_BUFFER      1024
 #define MAX_ESP_COMMAND_LEN    64
 
 int drv_esp_init(void);
