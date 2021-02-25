@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <json_parser.h>
+
 #include "cJSON.h"
 #include "board.h"
 
@@ -39,17 +41,17 @@ int make_json_board_state(char *json, void *data)
         return -1;
     }
 
-    sprintf(json, "%s\r\n", cJSON_PrintUnformatted(root));
+    sprintf(json, "%s", cJSON_PrintUnformatted(root));
     cJSON_Delete(root);
     return 0;
 }
 
-int parse_json_req_ledctrl(char *json, void *data)
+int parse_json_req_message(char *json)
 {
-    cJSON *root = NULL;
-//    cJSON *message = NULL;
+    int ret = -1;
 
-//    board_info_t *board = (board_info_t *)data;
+    cJSON *root = NULL;
+    cJSON *message = NULL;
 
     if((root = cJSON_Parse(json)) == NULL)
     {
@@ -57,7 +59,12 @@ int parse_json_req_ledctrl(char *json, void *data)
         return -1;
     }
 
-//    message = cJSON_GetObjectItem(root, "message");
-    return 0;
-    
+    message = cJSON_GetObjectItem(root, "message");
+    if(strcmp(message->valuestring, "req_led_ctrl") == 0)    
+        ret = REQ_LED_CTRL_MESSAGE;
+    else if(strcmp(message->valuestring, "req_pwr_ctrl") == 0)
+        ret = REQ_PWR_CTRL_MESSAGE;
+
+    cJSON_Delete(root);
+    return ret;
 }

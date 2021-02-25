@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <json_parser.h>
 
@@ -8,15 +9,17 @@
 
 typedef struct _cb_data_t
 {
-    uint8_t buf[MAX_UART_RX_BUFFER];
+    uint8_t buf[MAX_ESP_RX_BUFFER];
     uint16_t length;
 }cb_data_t;
 
 static char ip_addr[16];
-static char response[MAX_UART_RX_BUFFER];
+static char response[MAX_ESP_RX_BUFFER];
+
+static uint8_t is_run;
+static uint8_t client_list[MAX_ESP_CLIENT_NUM];
 
 static uint8_t data;
-static uint8_t is_run;
 static cb_data_t cb_data;
 UART_HandleTypeDef huart3;
 
@@ -188,17 +191,21 @@ static int start_esp_server(void)
 
     if(esp_at_command((uint8_t *)"AT+CIPMUX=1\r\n", (uint8_t *)response, &length, 1000) != 0)
     {
-        printf("ERROR :: %s() : multi connection enable fail\r\n", __func__);
+        printf("ERROR :: %s() : AT+CIPMUX=1 : multi connectio) enable fail\r\n", __func__);
         return -2;
     }
 
     if(esp_at_command((uint8_t *)"AT+CIPSERVER=1,3079\r\n", (uint8_t *)response, &length, 1000) != 0)
     {
-        printf("ERROR :: %s() : multi connection enable fail\r\n", __func__);
+        printf("ERROR :: %s() : AT+CIPSERVER=1,3079 : esp_server start fail\r\n", __func__);
         return -3;
     }
 
-    printf("ESP Server Start : IP = %s, Port = 3079\r\n", ip_addr);
+    if(esp_at_command((uint8_t *)"AT+CIPSTO=7200\r\n", (uint8_t *)response, &length, 1000) == 0)
+        printf("ESP Server Start : IP = %s, Port = 3079, ClientTimeOut = 7200 sec\r\n", ip_addr);
+    else
+        printf("ESP Server Start : IP = %s, Port = 3079, ClientTimeOut = 180 sec\r\n", ip_addr);
+
     memset(&cb_data, 0x00, sizeof(cb_data_t));
     is_run = 1;
 
@@ -213,16 +220,52 @@ static int start_esp_server(void)
         printf("%s", cb_data.buf);
         if(strstr((char *)cb_data.buf, "CONNECT") != NULL)
         {
-            char send_message[256];
+            int  client_id;
+            char send_message[256] = {0, };
 
-            memset(send_message, 0x00, sizeof(send_message));
-            if(get_board_state(send_message) == 0)
-                printf("send_message = %s", send_message);
+            if(strtok((char *)cb_data.buf, ",") == NULL)
+                continue;
             else
+                client_id = atoi(strtok(NULL, ","));
+
+            if(client_id > MAX_ESP_CLIENT_NUM)
+            {
+                char at_cmd[32] = {0, };
+                
+                sprintf(at_cmd, "AT+CIPCLOSE=%d\r\n", client_id);
+                if(esp_at_command((uint8_t *)at_cmd, (uint8_t *)response, &length, 1000) == 0)
+                    printf("Warnning :: %s() : client_id = %d, client is full\r\n", __func__, client_id);
+                else
+                    printf("ERROR :: %s() : AT+CIPCLOSE=%d\r\n", __func__, client_id);
+                continue;
+            }
+
+            if(get_board_state(send_message) != 0)
                 printf("get_board_state() fail\r\n");
+            else
+            {
+                char at_cmd[32] = {0, };
+                sprintf(at_cmd, "AT+CIPSEND=%d,%d\r\n", client_id, strlen(send_message));
+                if(esp_at_command((uint8_t *)at_cmd, (uint8_t *)response, &length, 1000) == 0)
+                {
+                    esp_at_command((uint8_t *)send_message, (uint8_t *)response, &length, 1000);
+                }
+                client_list[client_id] = 1;
+                printf("INFO :: client_list[%d] = %d\r\n", client_id, client_list[client_id]);
+            }
         }
         else if(strstr((char *)cb_data.buf, "CLOSED") != NULL)
         {
+            if(strtok((char *)cb_data.buf, ",") != NULL)
+            {
+                int client_id = atoi(strtok(NULL, ","));
+
+                if(client_id < MAX_ESP_CLIENT_NUM)
+                {
+                    client_list[client_id] = 0;
+                    printf("INFO :: client_list[%d] = %d\r\n", client_id, client_list[client_id]);
+                }
+            }
         }
         else if(strstr((char *)cb_data.buf, "JSON") != NULL)
         {
@@ -302,7 +345,6 @@ int drv_esp_test_command(void)
         else if(strcmp(command, "version") == 0)
         {
             printf("esp firmware version\r\n");
-            
             if(esp_at_command((uint8_t *)"AT+GMR\r\n", (uint8_t *)response, &length, 1000) != 0)
                 printf("ap scan command fail\r\n");
             else
@@ -314,7 +356,6 @@ int drv_esp_test_command(void)
         else if(strcmp(command, "ap_scan") == 0)
         {
             printf("ap scan...\r\n");
-
             if(esp_at_command((uint8_t *)"AT+CWLAP\r\n", (uint8_t *)response, &length, 5000) != 0)
                 printf("ap scan command fail\r\n");
             else
