@@ -68,3 +68,35 @@ int parse_json_req_message(char *json)
     cJSON_Delete(root);
     return ret;
 }
+
+int parse_json_req_led_control(char *json, char *label, uint8_t *blink)
+{
+    int ret = 0;
+
+    char *value;
+    cJSON *root = NULL;
+    cJSON *message = NULL;
+    cJSON *led = NULL;
+
+    if((root = cJSON_Parse(json)) == NULL)
+    {
+        printf("ERROR :: %s() : json = [%s]\r\n", __func__, json);
+        return -1;
+    }
+
+    message = cJSON_GetObjectItem(root, "message");
+    if(strcmp(message->valuestring, "req_led_ctrl") != 0)    
+    {
+        ret = -2;
+        goto rtn_code;
+    }
+
+    led    = cJSON_GetObjectItem(root, "led");
+    *blink = cJSON_GetObjectItem(led, "state")->valueint;
+    value  = cJSON_GetObjectItem(led, "label")->valuestring;
+    memcpy(label, value, strlen(value));
+
+rtn_code:
+    cJSON_Delete(root);
+    return ret;
+}

@@ -146,15 +146,13 @@ static int request_ip_addr(uint8_t is_debug)
     return -1;
 }
 
-static int get_board_state(char *json)
+static int get_board_state(board_info_t *board)
 {
-    board_info_t board;
-
-    memset(&board, 0x00, sizeof(board_info_t));
+    memset(board, 0x00, sizeof(board_info_t));
     for(int i = 0 ; i < MAX_LED_NUM ; i++)
     {
         uint16_t gpio_pin;
-        led_info_t *led_info = &board.led_list[i];
+        led_info_t *led_info = &board->led_list[i];
 
         switch(i)
         {
@@ -167,15 +165,27 @@ static int get_board_state(char *json)
         led_info->state = HAL_GPIO_ReadPin(GPIOD, gpio_pin);
     }
 
-    if(make_json_board_state(json, (void *)&board) != 0)
-        return -1;
+    return 0;
+}
 
+static int esp_send_messge(int client_id, char *message, char *response, uint16_t *length)
+{
+    char at_cmd[32] = {0, };
+
+    sprintf(at_cmd, "AT+CIPSEND=%d,%d\r\n", client_id, strlen(message));
+    if(esp_at_command((uint8_t *)at_cmd, (uint8_t *)response, length, 1000) == 0)
+    {
+        esp_at_command((uint8_t *)message, (uint8_t *)response, length, 1000);
+        // printf("message = %s\r\n", message);
+    }
     return 0;
 }
 
 static int start_esp_server(void)
 {
+    char message[256];
     uint16_t length = 0;
+    board_info_t board;
 
     if(esp_get_ip_addr(0) != 0)
     {
@@ -220,14 +230,7 @@ static int start_esp_server(void)
         printf("%s", cb_data.buf);
         if(strstr((char *)cb_data.buf, "CONNECT") != NULL)
         {
-            int  client_id;
-            char send_message[256] = {0, };
-
-            if(strtok((char *)cb_data.buf, ",") == NULL)
-                continue;
-            else
-                client_id = atoi(strtok(NULL, ","));
-
+            int client_id = atoi(strtok((char *)cb_data.buf, ","));
             if(client_id > MAX_ESP_CLIENT_NUM)
             {
                 char at_cmd[32] = {0, };
@@ -240,35 +243,103 @@ static int start_esp_server(void)
                 continue;
             }
 
-            if(get_board_state(send_message) != 0)
-                printf("get_board_state() fail\r\n");
+            get_board_state(&board);
+            memset(message, 0x00, sizeof(message));
+            if(make_json_board_state(message, (void *)&board) != 0)
+                printf("make_json_board_state() fail\r\n");
             else
             {
-                char at_cmd[32] = {0, };
-                sprintf(at_cmd, "AT+CIPSEND=%d,%d\r\n", client_id, strlen(send_message));
-                if(esp_at_command((uint8_t *)at_cmd, (uint8_t *)response, &length, 1000) == 0)
+                if(esp_send_messge(client_id, message, response, &length) == 0)
                 {
-                    esp_at_command((uint8_t *)send_message, (uint8_t *)response, &length, 1000);
-                }
-                client_list[client_id] = 1;
-                printf("INFO :: client_list[%d] = %d\r\n", client_id, client_list[client_id]);
-            }
-        }
-        else if(strstr((char *)cb_data.buf, "CLOSED") != NULL)
-        {
-            if(strtok((char *)cb_data.buf, ",") != NULL)
-            {
-                int client_id = atoi(strtok(NULL, ","));
-
-                if(client_id < MAX_ESP_CLIENT_NUM)
-                {
-                    client_list[client_id] = 0;
+                    client_list[client_id] = 1;
                     printf("INFO :: client_list[%d] = %d\r\n", client_id, client_list[client_id]);
                 }
             }
         }
+        else if(strstr((char *)cb_data.buf, "CLOSED") != NULL)
+        {
+            int client_id = atoi(strtok((char *)cb_data.buf, ","));
+            if(client_id < MAX_ESP_CLIENT_NUM)
+            {
+                client_list[client_id] = 0;
+                printf("INFO :: client_list[%d] = %d\r\n", client_id, client_list[client_id]);
+            }
+        }
         else if(strstr((char *)cb_data.buf, "JSON") != NULL)
         {
+            char *recv, *jstr, *ipd[4];
+            int id, length, req_type = 0; 
+
+            recv = strtok((char *)cb_data.buf, "JSON");
+            jstr = strtok(NULL, "JSON");
+
+            ipd[0] = strtok(recv, ":");
+            ipd[1] = strtok(ipd[0], ",");
+            ipd[2] = strtok(NULL, ",");
+            ipd[3] = strtok(NULL, ",");
+
+            id     = atoi(ipd[2]);
+            length = atoi(ipd[3]);
+
+            // printf("id  = [%s], length = %d\r\n", id, length);
+            printf("jstr = %s\r\n", jstr);
+
+            req_type = parse_json_req_message(jstr);
+            if(req_type == REQ_LED_CTRL_MESSAGE)
+            {
+                uint8_t state = 0;
+                char    label[16] = {0, };
+               
+                if(parse_json_req_led_control(jstr, label, &state) == 0)
+                {
+                    int i ;
+                    led_info_t *led = NULL;
+
+                    // printf("label = %s, state = %d\r\n", label, state);
+                    get_board_state(&board);
+                    for(i = 0 ; i < MAX_LED_NUM ; i++)
+                    {
+                        led = &board.led_list[i];
+                        if(strcmp(led->label, label) == 0)
+                            break;
+                    }
+
+                    if(i >= MAX_LED_NUM)
+                    {
+                        printf("Warning :: %s() : label = [%s]\r\n", __func__, label);
+                        continue;
+                    }
+                    
+                    if(led->state != state)
+                    {
+                        uint16_t gpio_pin;
+
+                        switch(i)
+                        {
+                            case 0: gpio_pin = GPIO_PIN_12; break;
+                            case 1: gpio_pin = GPIO_PIN_13; break;
+                            case 2: gpio_pin = GPIO_PIN_14; break;
+                            case 3: gpio_pin = GPIO_PIN_15; break;
+                        }
+
+                        HAL_GPIO_WritePin(GPIOD, gpio_pin, state);
+                        led->state = state;
+
+                        memset(message, 0x00, sizeof(message));
+                        make_json_board_state(message, (void *)&board);
+                        printf("message = [%s]\r\n", message);
+                        for(int j = 0 ; j < MAX_ESP_CLIENT_NUM ; j++)
+                        {
+                            if(client_list[j] != 0)
+                                esp_send_messge(j, message, response, &length);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                printf("Warning : %s() : unkwon json : jstr = %s\r\n", __func__, jstr);
+            }
         }
 
         memset(&cb_data, 0x00, sizeof(cb_data_t));
