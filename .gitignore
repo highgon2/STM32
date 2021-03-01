@@ -1,2 +1,3 @@
 Debug/
+__pycache__/
 **/.vscode/settings.json

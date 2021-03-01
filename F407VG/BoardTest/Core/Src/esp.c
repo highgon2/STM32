@@ -216,9 +216,7 @@ static int start_esp_server(void)
     else
         printf("ESP Server Start : IP = %s, Port = 3079, ClientTimeOut = 180 sec\r\n", ip_addr);
 
-    memset(&cb_data, 0x00, sizeof(cb_data_t));
     is_run = 1;
-
     while(is_run)
     {
         if(strstr((char *)cb_data.buf, "\r\n") == NULL)
@@ -268,7 +266,7 @@ static int start_esp_server(void)
         else if(strstr((char *)cb_data.buf, "JSON") != NULL)
         {
             char *recv, *jstr, *ipd[4];
-            int id, length, req_type = 0; 
+            int id, req_type = 0; 
 
             recv = strtok((char *)cb_data.buf, "JSON");
             jstr = strtok(NULL, "JSON");
