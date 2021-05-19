@@ -66,16 +66,138 @@ int __io_putchar(int ch)
     return ch;
 }
 
+#define J1939_EC1         0x18FEE300
+#define J1939_DM1         0x18FECA00
+#define J1939_BAM_CM      0x00EC0000
+#define J1939_BAM_DT      0x00EB0000
+#define MAX_BAM_LENGTH    1785
+
+typedef struct _bam_t
+{
+    uint32_t pgn;
+    uint16_t length;
+    uint8_t  num_of_packet;
+
+    uint16_t index;
+    uint8_t  message[MAX_BAM_LENGTH];
+}BAM_t;
+
+BAM_t bam;
 uint8_t read_data[8];
 CAN_RxHeaderTypeDef rx_header;
+
+int j1939_parser_bam(uint32_t ext_id, uint8_t *data)
+{
+    uint32_t bam_id = ext_id & 0x00FF0000;
+
+    if(bam_id == J1939_BAM_CM)
+    {
+        if(data[0] != 0x20)
+        {
+            printf("INFO :: %s() : invalid sync byte : data[0] = 0x%02x\r\n", __func__, data[0]);
+            return -1;
+        }
+
+        if(bam.pgn != 0)
+        {
+            printf("INFO :: %s() : already received BAM_CM : pgn = 0x%04lx\r\n", __func__, bam.pgn);
+            return -1;
+        }
+
+        memset(&bam, 0x00, sizeof(BAM_t));
+        bam.length        = data[2] << 8  | data[1];
+        bam.num_of_packet = data[3];
+        bam.pgn           = data[7] << 16 | data[6] << 8 | data[5];
+    }
+    else if(bam_id == J1939_BAM_DT)
+    {
+        if(bam.index < bam.length)
+        {
+            if((data[0] * 7) < bam.length)
+            {
+                memcpy(&bam.message[bam.index], &data[1], 7);
+                bam.index += 7;
+            }
+            else
+            {
+                for(int i = 0 ; i < 7 ; i++)
+                {
+                    if(bam.index < bam.length)
+                        bam.message[bam.index++] = data[1+i];
+                }
+            }
+
+            if(bam.index == bam.length)
+            {
+                uint32_t pgn = bam.pgn << 8;
+
+                if((pgn & J1939_DM1) == pgn)
+                {
+                    printf("DM1 Message : length = %d -----------------------\r\n", bam.length);
+                    for(int i = 0 ; i < bam.length ; i++)
+                    {
+                        printf("0x%02X, ", bam.message[i]);
+                        if((i%0x08) == 0x07) printf("\r\n");
+                    }
+                    if((bam.length % 0x08) != 0) printf("\r\n");
+                    printf("-------------------------------------------------\r\n");
+                }
+                else if((pgn & J1939_EC1) == pgn)
+                {
+                    printf("EC1 Message : length = %d -----------------------\r\n", bam.length);
+                    for(int i = 0 ; i < bam.length ; i++)
+                    {
+                        printf("0x%02X, ", bam.message[i]);
+                        if((i%0x08) == 0x07) printf("\r\n");
+                    }
+                    if((bam.length % 0x08) != 0) printf("\r\n");
+                    printf("-------------------------------------------------\r\n");
+                }
+                else
+                {
+                    printf("Warning :: %s() : pgn = 0x%08lx\r\n", __func__, pgn);
+                }
+                memset(&bam, 0x00, sizeof(BAM_t));
+            }
+        }
+    }
+    else
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     if(hcan->Instance == CAN1)
     {
+        uint32_t filter_mask;
         HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, read_data);
-        printf("CAN_ID = 0x%08lX, Data = [", rx_header.ExtId);
-        for(int i = 0 ; i < 8 ; i++) printf("0x%02X, ", read_data[i]);
-        printf("\b\b]\r\n");
+
+        HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, read_data);
+        filter_mask = rx_header.ExtId & 0x00FF0000;
+        switch(filter_mask)
+        {
+            case 0x00EB0000:
+            case 0x00EC0000:
+                j1939_parser_bam(rx_header.ExtId, read_data);
+                break;
+
+            case 0x00F00000:
+            case 0x00FD0000:
+            case 0x00FE0000:
+            case 0x00FF0000:
+                printf("CAN_ID = 0x%08lX, Data = [", rx_header.ExtId);
+                for(int i = 0 ; i < 8 ; i++) printf("0x%02X, ", read_data[i]);
+                printf("\b\b]\r\n");
+                break;
+
+            default:
+                printf("unknown data :: CAN_ID = 0x%08lx, filter_mask = 0x%08lx\r\n", rx_header.ExtId, filter_mask);
+                break;
+        }
     }
 }
 
@@ -175,6 +297,7 @@ static void MX_CAN1_Init(void)
     result |= set_can_filter(1, 0x00FD0000, 0x00FF0000);    /* 0x00FDxx00 : AT1S1, DLCC1, DPFC1, ECUID, EOI */
     result |= set_can_filter(2, 0x00FE0000, 0x00FF0000);    /* 0x00FExx00 : AMB, AT1T1I, CCVS1, DM1, EC1, EEC3, EPLP1, EPLP2, ET1, ET2, HOURS, IC1, LFC, IO, SHUTDN, TCI2 */
     result |= set_can_filter(3, 0x00FF4800, 0x00FFF800);    /* 0x00FF4x00 : E2M4A, E2M4C */
+    result |= set_can_filter(4, 0x00E80000, 0x00F80000);    /* 0x00Exxx00 : EB00, EC00 */
     result |= HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
     if(result != 0)
     {
