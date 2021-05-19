@@ -18,92 +18,82 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <stdio.h>
+#include <string.h>
+
 #include "main.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-
-/* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
 UART_HandleTypeDef huart5;
-
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_UART5_Init(void);
-/* USER CODE BEGIN PFP */
 
-/* USER CODE END PFP */
+static int set_can_filter(uint8_t filter_index, uint32_t filter_id, uint32_t filter_mask)
+{
+    uint32_t          id      = filter_id   << 3;
+    uint32_t          mask    = filter_mask << 3;
+    CAN_FilterTypeDef filter;
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
+    filter.FilterIdHigh         = (id & 0xFFFF0000) >> 16;
+    filter.FilterIdLow          = id  & 0x0000FFF8;
+    filter.FilterMaskIdHigh     = (mask & 0xFFFF0000) >> 16;
+    filter.FilterMaskIdLow      = mask  & 0x0000FFF8;
+    filter.FilterScale          = CAN_FILTERSCALE_32BIT;
+    filter.FilterMode           = CAN_FILTERMODE_IDMASK;
+    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+    filter.FilterBank           = filter_index;
+    filter.FilterActivation     = ENABLE;
+    filter.SlaveStartFilterBank = 14;
 
-/* USER CODE END 0 */
+    if(HAL_CAN_ConfigFilter(&hcan1, &filter) != HAL_OK)
+    {
+        printf("ERROR ::%s() : filter_index = %d, filter_id = 0x%lx, filter_mask = 0x%lx\r\n", __func__, filter_index, filter_id, filter_mask);
+        return -1;
+    }
 
-/**
- * @brief  The application entry point.
- * @retval int
- */
+    return 0;
+}
+
+int __io_putchar(int ch)
+{
+    if(HAL_UART_Transmit(&huart5, (uint8_t *)&ch, 1, 10) != HAL_OK)
+        return -1;
+
+    return ch;
+}
+
+uint8_t read_data[8];
+CAN_RxHeaderTypeDef rx_header;
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+    if(hcan->Instance == CAN1)
+    {
+        HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, read_data);
+        printf("CAN_ID = 0x%08lX, Data = [", rx_header.ExtId);
+        for(int i = 0 ; i < 8 ; i++) printf("0x%02X, ", read_data[i]);
+        printf("\b\b]\r\n");
+    }
+}
+
+
 int main(void)
 {
-    /* USER CODE BEGIN 1 */
-
-    /* USER CODE END 1 */
-
-    /* MCU Configuration--------------------------------------------------------*/
-
-    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
     HAL_Init();
-
-    /* USER CODE BEGIN Init */
-
-    /* USER CODE END Init */
-
-    /* Configure the system clock */
     SystemClock_Config();
 
-    /* USER CODE BEGIN SysInit */
-
-    /* USER CODE END SysInit */
-
-    /* Initialize all configured peripherals */
     MX_GPIO_Init();
     MX_CAN1_Init();
     MX_UART5_Init();
-    /* USER CODE BEGIN 2 */
 
-    /* USER CODE END 2 */
-
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
+    HAL_CAN_Start(&hcan1);
     while (1)
     {
-        /* USER CODE END WHILE */
-
-        /* USER CODE BEGIN 3 */
+        HAL_Delay(10);
     }
-    /* USER CODE END 3 */
 }
 
 /**
@@ -162,17 +152,11 @@ void SystemClock_Config(void)
  */
 static void MX_CAN1_Init(void)
 {
+    int result = 0;
 
-    /* USER CODE BEGIN CAN1_Init 0 */
-
-    /* USER CODE END CAN1_Init 0 */
-
-    /* USER CODE BEGIN CAN1_Init 1 */
-
-    /* USER CODE END CAN1_Init 1 */
     hcan1.Instance = CAN1;
-    hcan1.Init.Prescaler = 9;
     hcan1.Init.Mode = CAN_MODE_NORMAL;
+    hcan1.Init.Prescaler = 9;
     hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
     hcan1.Init.TimeSeg1 = CAN_BS1_16TQ;
     hcan1.Init.TimeSeg2 = CAN_BS2_3TQ;
@@ -186,10 +170,17 @@ static void MX_CAN1_Init(void)
     {
         Error_Handler();
     }
-    /* USER CODE BEGIN CAN1_Init 2 */
 
-    /* USER CODE END CAN1_Init 2 */
-
+    result |= set_can_filter(0, 0x00F00000, 0x00FFF800);    /* 0x00F00x00 : EEC1, EEC2 */
+    result |= set_can_filter(1, 0x00FD0000, 0x00FF0000);    /* 0x00FDxx00 : AT1S1, DLCC1, DPFC1, ECUID, EOI */
+    result |= set_can_filter(2, 0x00FE0000, 0x00FF0000);    /* 0x00FExx00 : AMB, AT1T1I, CCVS1, DM1, EC1, EEC3, EPLP1, EPLP2, ET1, ET2, HOURS, IC1, LFC, IO, SHUTDN, TCI2 */
+    result |= set_can_filter(3, 0x00FF4800, 0x00FFF800);    /* 0x00FF4x00 : E2M4A, E2M4C */
+    result |= HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+    if(result != 0)
+    {
+        printf("ERROR :: %s() : set_can_filter() fail\r\n", __func__);
+        Error_Handler();
+    }
 }
 
 /**
