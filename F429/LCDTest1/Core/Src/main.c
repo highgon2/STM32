@@ -22,6 +22,12 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <string.h>
+
+#include "ILI9341/ili9341.h"
+#include "ILI9341/st_logo1.h"
+#include "ILI9341/st_logo2.h"
 
 /* USER CODE END Includes */
 
@@ -62,13 +68,68 @@ static void MX_UART5_Init(void);
 static void MX_LTDC_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_SPI5_Init(void);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int __io_putchar(int ch)
+{
+    if(HAL_UART_Transmit(&huart5, (uint8_t *)&ch, 1, 10) != HAL_OK)
+        return -1;
+    return ch;
+}
 
+static void LCD_Config(void)
+{
+    LTDC_LayerCfgTypeDef pLayerCfg;
+
+    ili9341_Init();
+
+    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
+    pLayerCfg.WindowX0 = 0;
+    pLayerCfg.WindowX1 = 240;
+    pLayerCfg.WindowY0 = 0;
+    pLayerCfg.WindowY1 = 320;
+    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
+    pLayerCfg.Alpha = 255;
+    pLayerCfg.Alpha0 = 0;
+    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_1[0];
+    pLayerCfg.ImageWidth = 240;
+    pLayerCfg.ImageHeight = 160;
+    pLayerCfg.Backcolor.Blue = 0;
+    pLayerCfg.Backcolor.Green = 0;
+    pLayerCfg.Backcolor.Red = 0;
+    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 0) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
+    pLayerCfg.WindowX0 = 0;
+    pLayerCfg.WindowX1 = 240;
+    pLayerCfg.WindowY0 = 160;
+    pLayerCfg.WindowY1 = 320;
+    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
+    pLayerCfg.Alpha = 200;
+    pLayerCfg.Alpha0 = 0;
+    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_2[0];
+    pLayerCfg.ImageWidth = 240;
+    pLayerCfg.ImageHeight = 160;
+    pLayerCfg.Backcolor.Blue = 0;
+    pLayerCfg.Backcolor.Green = 0;
+    pLayerCfg.Backcolor.Red = 0;
+    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -104,7 +165,9 @@ int main(void)
     MX_LTDC_Init();
     MX_I2C3_Init();
     MX_SPI5_Init();
+
     /* USER CODE BEGIN 2 */
+    LCD_Config();
 
     /* USER CODE END 2 */
 
@@ -168,8 +231,8 @@ void SystemClock_Config(void)
         Error_Handler();
     }
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
-    PeriphClkInitStruct.PLLSAI.PLLSAIN = 50;
-    PeriphClkInitStruct.PLLSAI.PLLSAIR = 2;
+    PeriphClkInitStruct.PLLSAI.PLLSAIN = 60;
+    PeriphClkInitStruct.PLLSAI.PLLSAIR = 5;
     PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
@@ -345,7 +408,7 @@ static void MX_SPI5_Init(void)
     hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;
     hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;
     hspi5.Init.NSS = SPI_NSS_SOFT;
-    hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+    hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
     hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;
     hspi5.Init.TIMode = SPI_TIMODE_DISABLE;
     hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -400,15 +463,36 @@ static void MX_UART5_Init(void)
  */
 static void MX_GPIO_Init(void)
 {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     /* GPIO Ports Clock Enable */
     __HAL_RCC_GPIOF_CLK_ENABLE();
     __HAL_RCC_GPIOH_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_GPIOG_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOG_CLK_ENABLE();
+
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(LCD_CSX_GPIO_Port, LCD_CSX_Pin, GPIO_PIN_RESET);
+
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(GPIOD, LCD_RDX_Pin|LCD_WRX_Pin, GPIO_PIN_RESET);
+
+    /*Configure GPIO pin : LCD_CSX_Pin */
+    GPIO_InitStruct.Pin = LCD_CSX_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(LCD_CSX_GPIO_Port, &GPIO_InitStruct);
+
+    /*Configure GPIO pins : LCD_RDX_Pin LCD_WRX_Pin */
+    GPIO_InitStruct.Pin = LCD_RDX_Pin|LCD_WRX_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
 }
 

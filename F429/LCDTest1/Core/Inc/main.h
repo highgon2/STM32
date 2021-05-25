@@ -58,6 +58,12 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LCD_CSX_Pin GPIO_PIN_2
+#define LCD_CSX_GPIO_Port GPIOC
+#define LCD_RDX_Pin GPIO_PIN_12
+#define LCD_RDX_GPIO_Port GPIOD
+#define LCD_WRX_Pin GPIO_PIN_13
+#define LCD_WRX_GPIO_Port GPIOD
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
