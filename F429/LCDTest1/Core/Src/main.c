@@ -65,9 +65,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_UART5_Init(void);
-static void MX_LTDC_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_SPI5_Init(void);
+static void MX_LTDC_Init(void);
 
 /* USER CODE BEGIN PFP */
 
@@ -80,55 +80,6 @@ int __io_putchar(int ch)
     if(HAL_UART_Transmit(&huart5, (uint8_t *)&ch, 1, 10) != HAL_OK)
         return -1;
     return ch;
-}
-
-static void LCD_Config(void)
-{
-    LTDC_LayerCfgTypeDef pLayerCfg;
-
-    ili9341_Init();
-
-    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
-    pLayerCfg.WindowX0 = 0;
-    pLayerCfg.WindowX1 = 240;
-    pLayerCfg.WindowY0 = 0;
-    pLayerCfg.WindowY1 = 320;
-    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
-    pLayerCfg.Alpha = 255;
-    pLayerCfg.Alpha0 = 0;
-    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_1[0];
-    pLayerCfg.ImageWidth = 240;
-    pLayerCfg.ImageHeight = 160;
-    pLayerCfg.Backcolor.Blue = 0;
-    pLayerCfg.Backcolor.Green = 0;
-    pLayerCfg.Backcolor.Red = 0;
-    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 0) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
-    pLayerCfg.WindowX0 = 0;
-    pLayerCfg.WindowX1 = 240;
-    pLayerCfg.WindowY0 = 160;
-    pLayerCfg.WindowY1 = 320;
-    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
-    pLayerCfg.Alpha = 200;
-    pLayerCfg.Alpha0 = 0;
-    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_2[0];
-    pLayerCfg.ImageWidth = 240;
-    pLayerCfg.ImageHeight = 160;
-    pLayerCfg.Backcolor.Blue = 0;
-    pLayerCfg.Backcolor.Green = 0;
-    pLayerCfg.Backcolor.Red = 0;
-    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 1) != HAL_OK)
-    {
-        Error_Handler();
-    }
 }
 /* USER CODE END 0 */
 
@@ -162,13 +113,11 @@ int main(void)
     MX_GPIO_Init();
     MX_CAN2_Init();
     MX_UART5_Init();
-    MX_LTDC_Init();
     MX_I2C3_Init();
     MX_SPI5_Init();
+    MX_LTDC_Init();
 
     /* USER CODE BEGIN 2 */
-    LCD_Config();
-
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -176,7 +125,6 @@ int main(void)
     while (1)
     {
         /* USER CODE END WHILE */
-
         /* USER CODE BEGIN 3 */
     }
     /* USER CODE END 3 */
@@ -338,7 +286,7 @@ static void MX_LTDC_Init(void)
     LTDC_LayerCfgTypeDef pLayerCfg = {0};
 
     /* USER CODE BEGIN LTDC_Init 1 */
-
+    ili9341_Init();
     /* USER CODE END LTDC_Init 1 */
     hltdc.Instance = LTDC;
     hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
@@ -360,6 +308,9 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
+
+    /* USER CODE BEGIN LTDC_Init 2 */
+    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
     pLayerCfg.WindowX0 = 0;
     pLayerCfg.WindowX1 = 240;
     pLayerCfg.WindowY0 = 0;
@@ -369,9 +320,9 @@ static void MX_LTDC_Init(void)
     pLayerCfg.Alpha0 = 0;
     pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
     pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    pLayerCfg.FBStartAdress = 0;
+    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_1[0];
     pLayerCfg.ImageWidth = 240;
-    pLayerCfg.ImageHeight = 320;
+    pLayerCfg.ImageHeight = 160;
     pLayerCfg.Backcolor.Blue = 0;
     pLayerCfg.Backcolor.Green = 0;
     pLayerCfg.Backcolor.Red = 0;
@@ -379,8 +330,27 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
-    /* USER CODE BEGIN LTDC_Init 2 */
 
+    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
+    pLayerCfg.WindowX0 = 0;
+    pLayerCfg.WindowX1 = 240;
+    pLayerCfg.WindowY0 = 160;
+    pLayerCfg.WindowY1 = 320;
+    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
+    pLayerCfg.Alpha = 200;
+    pLayerCfg.Alpha0 = 0;
+    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_2[0];
+    pLayerCfg.ImageWidth = 240;
+    pLayerCfg.ImageHeight = 160;
+    pLayerCfg.Backcolor.Blue = 0;
+    pLayerCfg.Backcolor.Green = 0;
+    pLayerCfg.Backcolor.Red = 0;
+    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 1) != HAL_OK)
+    {
+        Error_Handler();
+    }
     /* USER CODE END LTDC_Init 2 */
 
 }
