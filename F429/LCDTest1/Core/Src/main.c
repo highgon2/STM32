@@ -68,7 +68,6 @@ static void MX_UART5_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_SPI5_Init(void);
 static void MX_LTDC_Init(void);
-
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -116,7 +115,6 @@ int main(void)
     MX_I2C3_Init();
     MX_SPI5_Init();
     MX_LTDC_Init();
-
     /* USER CODE BEGIN 2 */
     /* USER CODE END 2 */
 
@@ -125,6 +123,7 @@ int main(void)
     while (1)
     {
         /* USER CODE END WHILE */
+        // printf("Hi~\r\n");
         /* USER CODE BEGIN 3 */
     }
     /* USER CODE END 3 */
@@ -308,7 +307,6 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
-
     /* USER CODE BEGIN LTDC_Init 2 */
     memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
     pLayerCfg.WindowX0 = 0;
@@ -378,7 +376,7 @@ static void MX_SPI5_Init(void)
     hspi5.Init.CLKPolarity = SPI_POLARITY_LOW;
     hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;
     hspi5.Init.NSS = SPI_NSS_SOFT;
-    hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+    hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
     hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;
     hspi5.Init.TIMode = SPI_TIMODE_DISABLE;
     hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
