@@ -68,6 +68,9 @@ void Error_Handler(void);
 #define LCD_TS_I2C3_SDA_GPIO_Port GPIOC
 #define LCD_TS_I2C3_SCL_Pin GPIO_PIN_8
 #define LCD_TS_I2C3_SCL_GPIO_Port GPIOA
+#define LCD_TS_INT1_Pin GPIO_PIN_15
+#define LCD_TS_INT1_GPIO_Port GPIOA
+#define LCD_TS_INT1_EXTI_IRQn EXTI15_10_IRQn
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

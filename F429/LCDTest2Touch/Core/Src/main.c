@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "extlib/lcd/ili9341.h"
+#include "extlib/lcd/stmpe811.h"
 
 #include "st_logo1.h"
 #include "st_logo2.h"
@@ -83,6 +84,78 @@ int __io_putchar(int ch)
     return ch;
 }
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin  == LCD_TS_INT1_Pin)
+    {
+        uint32_t _x = 0, _y = 0;
+        uint16_t TsYBoundary = 320;
+        uint16_t TsXBoundary = 240;
+        uint16_t xDiff, yDiff , x , y, xr, yr;
+
+        stmpe811_TS_GetXY(STMPE811_DEVICE_ID, &x, &y);
+
+        /* Y value first correction */
+        y -= 360;  
+        /* Y value second correction */
+        yr = y / 11;
+
+        /* Return y position value */
+        if(yr <= 0)
+        {
+            yr = 0;
+        }
+        else if (yr > TsYBoundary)
+        {
+            yr = TsYBoundary - 1;
+        }
+        else
+        {
+
+        }
+        y = yr;
+
+        /* X value first correction */
+        if(x <= 3000)
+        {
+            x = 3870 - x;
+        }
+        else
+        {
+            x = 3800 - x;
+        }
+
+        /* X value second correction */  
+        xr = x / 15;
+
+        /* Return X position value */
+        if(xr <= 0)
+        {
+            xr = 0;
+        }
+        else if (xr > TsXBoundary)
+        {
+            xr = TsXBoundary - 1;
+        }
+        else 
+        {
+
+        }
+
+        x = xr;
+        xDiff = x > _x? (x - _x): (_x - x);
+        yDiff = y > _y? (y - _y): (_y - y); 
+
+        if (xDiff + yDiff > 5)
+        {
+            _x = x;
+            _y = y; 
+        }
+
+        printf("x = %ld, y = %ld\r\n", _x, _y);
+        stmpe811_TS_ClearIT(STMPE811_DEVICE_ID);
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -120,6 +193,10 @@ int main(void)
     MX_SPI5_Init();
     MX_LTDC_Init();
     /* USER CODE BEGIN 2 */
+
+    stmpe811_Init(STMPE811_DEVICE_ID);
+    stmpe811_TS_EnableIT(STMPE811_DEVICE_ID);
+    stmpe811_TS_Start(STMPE811_DEVICE_ID);
 
     /* USER CODE END 2 */
 
@@ -312,25 +389,7 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
-    pLayerCfg.WindowX0 = 0;
-    pLayerCfg.WindowX1 = 240;
-    pLayerCfg.WindowY0 = 0;
-    pLayerCfg.WindowY1 = 320;
-    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
-    pLayerCfg.Alpha = 255;
-    pLayerCfg.Alpha0 = 0;
-    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    pLayerCfg.FBStartAdress = 0;
-    pLayerCfg.ImageWidth = 240;
-    pLayerCfg.ImageHeight = 320;
-    pLayerCfg.Backcolor.Blue = 0;
-    pLayerCfg.Backcolor.Green = 0;
-    pLayerCfg.Backcolor.Red = 0;
-    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 0) != HAL_OK)
-    {
-        Error_Handler();
-    }
+
     /* USER CODE BEGIN LTDC_Init 2 */
     memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
     pLayerCfg.WindowX0 = 0;
@@ -374,7 +433,6 @@ static void MX_LTDC_Init(void)
         Error_Handler();
     }
     /* USER CODE END LTDC_Init 2 */
-
 }
 
 /**
@@ -485,6 +543,16 @@ static void MX_GPIO_Init(void)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : LCD_TS_INT1_Pin */
+    GPIO_InitStruct.Pin = LCD_TS_INT1_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(LCD_TS_INT1_GPIO_Port, &GPIO_InitStruct);
+
+    /* EXTI interrupt init*/
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 15, 0);
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
 
