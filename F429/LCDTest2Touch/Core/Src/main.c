@@ -109,10 +109,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         {
             yr = TsYBoundary - 1;
         }
-        else
-        {
-
-        }
         y = yr;
 
         /* X value first correction */
@@ -137,11 +133,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         {
             xr = TsXBoundary - 1;
         }
-        else 
-        {
-
-        }
-
         x = xr;
         xDiff = x > _x? (x - _x): (_x - x);
         yDiff = y > _y? (y - _y): (_y - y); 
