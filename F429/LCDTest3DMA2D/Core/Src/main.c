@@ -25,11 +25,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "extlib/lcd/ili9341.h"
-#include "extlib/lcd/stmpe811.h"
-
-#include "st_logo1.h"
-#include "st_logo2.h"
+#include "extlib/stm32f429i_discovery_ts.h"
+#include "extlib/stm32f429i_discovery_lcd.h"
 
 /* USER CODE END Includes */
 
@@ -40,7 +37,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define STMPE811_DEVICE_ID  0x82
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,6 +47,8 @@
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan2;
 
+DMA2D_HandleTypeDef hdma2d;
+
 I2C_HandleTypeDef hi2c3;
 
 LTDC_HandleTypeDef hltdc;
@@ -60,7 +58,7 @@ SPI_HandleTypeDef hspi5;
 UART_HandleTypeDef huart5;
 
 /* USER CODE BEGIN PV */
-
+static uint8_t frame_buffer[153600/*240*320*2*/];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +69,7 @@ static void MX_UART5_Init(void);
 static void MX_I2C3_Init(void);
 static void MX_SPI5_Init(void);
 static void MX_LTDC_Init(void);
+static void MX_DMA2D_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -84,67 +83,30 @@ int __io_putchar(int ch)
     return ch;
 }
 
+static uint16_t x, y;
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if(GPIO_Pin  == LCD_TS_INT1_Pin)
     {
-        uint32_t _x = 0, _y = 0;
-        uint16_t TsYBoundary = 320;
-        uint16_t TsXBoundary = 240;
-        uint16_t xDiff, yDiff , x , y, xr, yr;
-
-        stmpe811_TS_GetXY(STMPE811_DEVICE_ID, &x, &y);
-
-        /* Y value first correction */
-        y -= 360;  
-        /* Y value second correction */
-        yr = y / 11;
-
-        /* Return y position value */
-        if(yr <= 0)
+        TS_StateTypeDef tp_state;
+        BSP_TS_GetState(&tp_state);
+        if(x != tp_state.X || y != tp_state.Y)
         {
-            yr = 0;
-        }
-        else if (yr > TsYBoundary)
-        {
-            yr = TsYBoundary - 1;
-        }
-        y = yr;
+            char buf[32] = {0, };
 
-        /* X value first correction */
-        if(x <= 3000)
-        {
-            x = 3870 - x;
-        }
-        else
-        {
-            x = 3800 - x;
-        }
+            if(tp_state.X > 240) tp_state.X = 240;
+            if(tp_state.Y > 320) tp_state.Y = 320;
 
-        /* X value second correction */  
-        xr = x / 15;
+            sprintf(buf, "x = %d, y = %d", tp_state.X, tp_state.Y);
+            // printf("%s\r\n", buf);
+            BSP_LCD_Clear(LCD_COLOR_WHITE);
 
-        /* Return X position value */
-        if(xr <= 0)
-        {
-            xr = 0;
+            BSP_LCD_SetFont(&Font20);
+            BSP_LCD_DisplayStringAt(0, 120, (uint8_t *)buf, CENTER_MODE);
+            x = tp_state.X;
+            y = tp_state.Y;
         }
-        else if (xr > TsXBoundary)
-        {
-            xr = TsXBoundary - 1;
-        }
-        x = xr;
-        xDiff = x > _x? (x - _x): (_x - x);
-        yDiff = y > _y? (y - _y): (_y - y); 
-
-        if (xDiff + yDiff > 5)
-        {
-            _x = x;
-            _y = y; 
-        }
-
-        printf("x = %ld, y = %ld\r\n", _x, _y);
-        stmpe811_TS_ClearIT(STMPE811_DEVICE_ID);
+        BSP_TS_ITClear();
     }
 }
 
@@ -157,7 +119,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 int main(void)
 {
     /* USER CODE BEGIN 1 */
-
     /* USER CODE END 1 */
 
     /* MCU Configuration--------------------------------------------------------*/
@@ -183,11 +144,22 @@ int main(void)
     MX_I2C3_Init();
     MX_SPI5_Init();
     MX_LTDC_Init();
+    MX_DMA2D_Init();
     /* USER CODE BEGIN 2 */
+    BSP_LCD_Init(hltdc, hdma2d);
+    BSP_LCD_LayerDefaultInit(LCD_BACKGROUND_LAYER, (uint32_t)frame_buffer);
+    BSP_LCD_SelectLayer(LCD_BACKGROUND_LAYER);
+    BSP_LCD_DisplayOn();
+    BSP_LCD_Clear(LCD_COLOR_WHITE);
 
-    stmpe811_Init(STMPE811_DEVICE_ID);
-    stmpe811_TS_EnableIT(STMPE811_DEVICE_ID);
-    stmpe811_TS_Start(STMPE811_DEVICE_ID);
+    BSP_LCD_SetBackColor(RGB_LCD_COLOR_WHITE);
+    BSP_LCD_SetTextColor(RGB_LCD_COLOR_BLACK);
+    BSP_LCD_SetFont(&LCD_DEFAULT_FONT);
+    BSP_LCD_DisplayStringAt(0, 150, (uint8_t *)"LCD Test1", CENTER_MODE);
+    BSP_LCD_DisplayStringAt(0, 180, (uint8_t *)"LCD Test2", CENTER_MODE);
+
+    BSP_TS_Init(240, 320);
+    BSP_TS_ITConfig();
 
     /* USER CODE END 2 */
 
@@ -298,6 +270,35 @@ static void MX_CAN2_Init(void)
 }
 
 /**
+ * @brief DMA2D Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_DMA2D_Init(void)
+{
+
+    /* USER CODE BEGIN DMA2D_Init 0 */
+
+    /* USER CODE END DMA2D_Init 0 */
+
+    /* USER CODE BEGIN DMA2D_Init 1 */
+
+    /* USER CODE END DMA2D_Init 1 */
+    hdma2d.Instance = DMA2D;
+    hdma2d.Init.Mode = DMA2D_R2M;
+    hdma2d.Init.ColorMode = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.OutputOffset = 0;
+    if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    /* USER CODE BEGIN DMA2D_Init 2 */
+
+    /* USER CODE END DMA2D_Init 2 */
+
+}
+
+/**
  * @brief I2C3 Initialization Function
  * @param None
  * @retval None
@@ -352,13 +353,11 @@ static void MX_LTDC_Init(void)
 {
 
     /* USER CODE BEGIN LTDC_Init 0 */
-
     /* USER CODE END LTDC_Init 0 */
 
     LTDC_LayerCfgTypeDef pLayerCfg = {0};
 
     /* USER CODE BEGIN LTDC_Init 1 */
-    ili9341_Init();
     /* USER CODE END LTDC_Init 1 */
     hltdc.Instance = LTDC;
     hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
@@ -380,9 +379,6 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
-
-    /* USER CODE BEGIN LTDC_Init 2 */
-    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
     pLayerCfg.WindowX0 = 0;
     pLayerCfg.WindowX1 = 240;
     pLayerCfg.WindowY0 = 0;
@@ -392,9 +388,9 @@ static void MX_LTDC_Init(void)
     pLayerCfg.Alpha0 = 0;
     pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
     pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_1[0];
+    pLayerCfg.FBStartAdress = 0;
     pLayerCfg.ImageWidth = 240;
-    pLayerCfg.ImageHeight = 160;
+    pLayerCfg.ImageHeight = 320;
     pLayerCfg.Backcolor.Blue = 0;
     pLayerCfg.Backcolor.Green = 0;
     pLayerCfg.Backcolor.Red = 0;
@@ -402,28 +398,9 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
-
-    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
-    pLayerCfg.WindowX0 = 0;
-    pLayerCfg.WindowX1 = 240;
-    pLayerCfg.WindowY0 = 160;
-    pLayerCfg.WindowY1 = 320;
-    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
-    pLayerCfg.Alpha = 200;
-    pLayerCfg.Alpha0 = 0;
-    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
-    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_2[0];
-    pLayerCfg.ImageWidth = 240;
-    pLayerCfg.ImageHeight = 160;
-    pLayerCfg.Backcolor.Blue = 0;
-    pLayerCfg.Backcolor.Green = 0;
-    pLayerCfg.Backcolor.Red = 0;
-    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 1) != HAL_OK)
-    {
-        Error_Handler();
-    }
+    /* USER CODE BEGIN LTDC_Init 2 */
     /* USER CODE END LTDC_Init 2 */
+
 }
 
 /**
