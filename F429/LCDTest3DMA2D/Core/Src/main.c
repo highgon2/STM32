@@ -22,6 +22,14 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <string.h>
+
+#include "extlib/lcd/ili9341.h"
+#include "extlib/lcd/stmpe811.h"
+
+#include "st_logo1.h"
+#include "st_logo2.h"
 
 /* USER CODE END Includes */
 
@@ -32,6 +40,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define STMPE811_DEVICE_ID  0x82
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,6 +77,76 @@ static void MX_LTDC_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int __io_putchar(int ch)
+{
+    if(HAL_UART_Transmit(&huart5, (uint8_t *)&ch, 1, 10) != HAL_OK)
+        return -1;
+    return ch;
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin  == LCD_TS_INT1_Pin)
+    {
+        uint32_t _x = 0, _y = 0;
+        uint16_t TsYBoundary = 320;
+        uint16_t TsXBoundary = 240;
+        uint16_t xDiff, yDiff , x , y, xr, yr;
+
+        stmpe811_TS_GetXY(STMPE811_DEVICE_ID, &x, &y);
+
+        /* Y value first correction */
+        y -= 360;  
+        /* Y value second correction */
+        yr = y / 11;
+
+        /* Return y position value */
+        if(yr <= 0)
+        {
+            yr = 0;
+        }
+        else if (yr > TsYBoundary)
+        {
+            yr = TsYBoundary - 1;
+        }
+        y = yr;
+
+        /* X value first correction */
+        if(x <= 3000)
+        {
+            x = 3870 - x;
+        }
+        else
+        {
+            x = 3800 - x;
+        }
+
+        /* X value second correction */  
+        xr = x / 15;
+
+        /* Return X position value */
+        if(xr <= 0)
+        {
+            xr = 0;
+        }
+        else if (xr > TsXBoundary)
+        {
+            xr = TsXBoundary - 1;
+        }
+        x = xr;
+        xDiff = x > _x? (x - _x): (_x - x);
+        yDiff = y > _y? (y - _y): (_y - y); 
+
+        if (xDiff + yDiff > 5)
+        {
+            _x = x;
+            _y = y; 
+        }
+
+        printf("x = %ld, y = %ld\r\n", _x, _y);
+        stmpe811_TS_ClearIT(STMPE811_DEVICE_ID);
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -105,6 +184,10 @@ int main(void)
     MX_SPI5_Init();
     MX_LTDC_Init();
     /* USER CODE BEGIN 2 */
+
+    stmpe811_Init(STMPE811_DEVICE_ID);
+    stmpe811_TS_EnableIT(STMPE811_DEVICE_ID);
+    stmpe811_TS_Start(STMPE811_DEVICE_ID);
 
     /* USER CODE END 2 */
 
@@ -275,7 +358,7 @@ static void MX_LTDC_Init(void)
     LTDC_LayerCfgTypeDef pLayerCfg = {0};
 
     /* USER CODE BEGIN LTDC_Init 1 */
-
+    ili9341_Init();
     /* USER CODE END LTDC_Init 1 */
     hltdc.Instance = LTDC;
     hltdc.Init.HSPolarity = LTDC_HSPOLARITY_AL;
@@ -297,6 +380,9 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
+
+    /* USER CODE BEGIN LTDC_Init 2 */
+    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
     pLayerCfg.WindowX0 = 0;
     pLayerCfg.WindowX1 = 240;
     pLayerCfg.WindowY0 = 0;
@@ -306,9 +392,9 @@ static void MX_LTDC_Init(void)
     pLayerCfg.Alpha0 = 0;
     pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
     pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-    pLayerCfg.FBStartAdress = 0;
+    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_1[0];
     pLayerCfg.ImageWidth = 240;
-    pLayerCfg.ImageHeight = 320;
+    pLayerCfg.ImageHeight = 160;
     pLayerCfg.Backcolor.Blue = 0;
     pLayerCfg.Backcolor.Green = 0;
     pLayerCfg.Backcolor.Red = 0;
@@ -316,10 +402,28 @@ static void MX_LTDC_Init(void)
     {
         Error_Handler();
     }
-    /* USER CODE BEGIN LTDC_Init 2 */
 
+    memset(&pLayerCfg, 0, sizeof(LTDC_LayerCfgTypeDef));
+    pLayerCfg.WindowX0 = 0;
+    pLayerCfg.WindowX1 = 240;
+    pLayerCfg.WindowY0 = 160;
+    pLayerCfg.WindowY1 = 320;
+    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
+    pLayerCfg.Alpha = 200;
+    pLayerCfg.Alpha0 = 0;
+    pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
+    pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
+    pLayerCfg.FBStartAdress = (uint32_t)&ST_LOGO_2[0];
+    pLayerCfg.ImageWidth = 240;
+    pLayerCfg.ImageHeight = 160;
+    pLayerCfg.Backcolor.Blue = 0;
+    pLayerCfg.Backcolor.Green = 0;
+    pLayerCfg.Backcolor.Red = 0;
+    if (HAL_LTDC_ConfigLayer(&hltdc, &pLayerCfg, 1) != HAL_OK)
+    {
+        Error_Handler();
+    }
     /* USER CODE END LTDC_Init 2 */
-
 }
 
 /**
