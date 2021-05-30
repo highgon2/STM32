@@ -189,7 +189,7 @@ void BSP_LCD_LayerDefaultInit(uint16_t LayerIndex, uint32_t FB_Address)
     Layercfg.WindowX1 = BSP_LCD_GetXSize();
     Layercfg.WindowY0 = 0;
     Layercfg.WindowY1 = BSP_LCD_GetYSize(); 
-    Layercfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;//LTDC_PIXEL_FORMAT_ARGB8888;
+    Layercfg.PixelFormat = LTDC_PIXEL_FORMAT_ARGB8888;
     Layercfg.FBStartAdress = FB_Address;
     Layercfg.Alpha = 255;
     Layercfg.Alpha0 = 0;
@@ -607,7 +607,7 @@ void BSP_LCD_DrawHLine(uint16_t Xpos, uint16_t Ypos, uint16_t Length)
     uint32_t xaddress = 0;
 
     /* Get the line address */
-    xaddress = (LtdcHandler.LayerCfg[ActiveLayer].FBStartAdress) + 2*(BSP_LCD_GetXSize()*Ypos + Xpos);
+    xaddress = (LtdcHandler.LayerCfg[ActiveLayer].FBStartAdress) + 4*(BSP_LCD_GetXSize()*Ypos + Xpos);
 
     /* Write line */
     FillBuffer(ActiveLayer, (uint32_t *)xaddress, Length, 1, 0, DrawProp[ActiveLayer].TextColor);
@@ -624,7 +624,7 @@ void BSP_LCD_DrawVLine(uint16_t Xpos, uint16_t Ypos, uint16_t Length)
     uint32_t xaddress = 0;
 
     /* Get the line address */
-    xaddress = (LtdcHandler.LayerCfg[ActiveLayer].FBStartAdress) + 2*(BSP_LCD_GetXSize()*Ypos + Xpos);
+    xaddress = (LtdcHandler.LayerCfg[ActiveLayer].FBStartAdress) + 4*(BSP_LCD_GetXSize()*Ypos + Xpos);
 
     /* Write line */
     FillBuffer(ActiveLayer, (uint32_t *)xaddress, 1, Length, (BSP_LCD_GetXSize() - 1), DrawProp[ActiveLayer].TextColor);
@@ -1236,7 +1236,7 @@ __weak void BSP_LCD_MspInit(void)
 void BSP_LCD_DrawPixel(uint16_t Xpos, uint16_t Ypos, uint32_t RGB_Code)
 {
     /* Write data value to all SDRAM memory */
-    *(__IO uint16_t*) (LtdcHandler.LayerCfg[ActiveLayer].FBStartAdress + (2*(Ypos*BSP_LCD_GetXSize() + Xpos))) = RGB_Code;
+    *(__IO uint32_t*) (LtdcHandler.LayerCfg[ActiveLayer].FBStartAdress + (4*(Ypos*BSP_LCD_GetXSize() + Xpos))) = RGB_Code;
 }
 
 /**
@@ -1307,7 +1307,7 @@ static void FillBuffer(uint32_t LayerIndex, void * pDst, uint32_t xSize, uint32_
 
     /* Register to memory mode with ARGB8888 as color Mode */ 
     Dma2dHandler.Init.Mode         = DMA2D_R2M;
-    Dma2dHandler.Init.ColorMode    = DMA2D_RGB565;//DMA2D_ARGB8888;
+    Dma2dHandler.Init.ColorMode    = DMA2D_ARGB8888;
     Dma2dHandler.Init.OutputOffset = OffLine;      
 
     Dma2dHandler.Instance = DMA2D; 

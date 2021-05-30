@@ -37,6 +37,20 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SDRAM_FRAME_BUFFER 0xD0000000
+
+#define SDRAM_MODEREG_BURST_LENGTH_1             ((uint16_t)0x0000)
+#define SDRAM_MODEREG_BURST_LENGTH_2             ((uint16_t)0x0001)
+#define SDRAM_MODEREG_BURST_LENGTH_4             ((uint16_t)0x0002)
+#define SDRAM_MODEREG_BURST_LENGTH_8             ((uint16_t)0x0004)
+#define SDRAM_MODEREG_BURST_TYPE_SEQUENTIAL      ((uint16_t)0x0000)
+#define SDRAM_MODEREG_BURST_TYPE_INTERLEAVED     ((uint16_t)0x0008)
+#define SDRAM_MODEREG_CAS_LATENCY_2              ((uint16_t)0x0020)
+#define SDRAM_MODEREG_CAS_LATENCY_3              ((uint16_t)0x0030)
+#define SDRAM_MODEREG_OPERATING_MODE_STANDARD    ((uint16_t)0x0000)
+#define SDRAM_MODEREG_WRITEBURST_MODE_PROGRAMMED ((uint16_t)0x0000)
+#define SDRAM_MODEREG_WRITEBURST_MODE_SINGLE     ((uint16_t)0x0200)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -57,8 +71,9 @@ SPI_HandleTypeDef hspi5;
 
 UART_HandleTypeDef huart5;
 
+SDRAM_HandleTypeDef hsdram1;
+
 /* USER CODE BEGIN PV */
-static uint8_t frame_buffer[153600/*240*320*2*/];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,6 +85,7 @@ static void MX_I2C3_Init(void);
 static void MX_SPI5_Init(void);
 static void MX_LTDC_Init(void);
 static void MX_DMA2D_Init(void);
+static void MX_FMC_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -146,22 +162,22 @@ int main(void)
     MX_SPI5_Init();
     MX_LTDC_Init();
     MX_DMA2D_Init();
+    MX_FMC_Init();
     /* USER CODE BEGIN 2 */
     BSP_LCD_Init(hltdc, hdma2d);
-    BSP_LCD_LayerDefaultInit(LCD_BACKGROUND_LAYER, (uint32_t)frame_buffer);
+    BSP_LCD_LayerDefaultInit(LCD_BACKGROUND_LAYER, (uint32_t)SDRAM_FRAME_BUFFER);
     BSP_LCD_SelectLayer(LCD_BACKGROUND_LAYER);
     BSP_LCD_DisplayOn();
     BSP_LCD_Clear(LCD_COLOR_WHITE);
 
-    BSP_LCD_SetBackColor(RGB_LCD_COLOR_WHITE);
-    BSP_LCD_SetTextColor(RGB_LCD_COLOR_BLACK);
+    BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
     BSP_LCD_SetFont(&LCD_DEFAULT_FONT);
     BSP_LCD_DisplayStringAt(0, 150, (uint8_t *)"LCD Test1", CENTER_MODE);
     BSP_LCD_DisplayStringAt(0, 180, (uint8_t *)"LCD Test2", CENTER_MODE);
 
     BSP_TS_Init(240, 320);
     BSP_TS_ITConfig();
-
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -287,7 +303,7 @@ static void MX_DMA2D_Init(void)
     /* USER CODE END DMA2D_Init 1 */
     hdma2d.Instance = DMA2D;
     hdma2d.Init.Mode = DMA2D_R2M;
-    hdma2d.Init.ColorMode = DMA2D_OUTPUT_RGB565;
+    hdma2d.Init.ColorMode = DMA2D_OUTPUT_ARGB8888;
     hdma2d.Init.OutputOffset = 0;
     if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
     {
@@ -386,7 +402,7 @@ static void MX_LTDC_Init(void)
     pLayerCfg.WindowX1 = 240;
     pLayerCfg.WindowY0 = 0;
     pLayerCfg.WindowY1 = 320;
-    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_RGB565;
+    pLayerCfg.PixelFormat = LTDC_PIXEL_FORMAT_ARGB8888;
     pLayerCfg.Alpha = 255;
     pLayerCfg.Alpha0 = 0;
     pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
@@ -478,6 +494,114 @@ static void MX_UART5_Init(void)
 
 }
 
+/* FMC initialization function */
+static void MX_FMC_Init(void)
+{
+
+    /* USER CODE BEGIN FMC_Init 0 */
+
+    /* USER CODE END FMC_Init 0 */
+
+    FMC_SDRAM_TimingTypeDef SdramTiming = {0};
+
+    /* USER CODE BEGIN FMC_Init 1 */
+
+    /* USER CODE END FMC_Init 1 */
+
+    /** Perform the SDRAM1 memory initialization sequence
+    */
+    hsdram1.Instance = FMC_SDRAM_DEVICE;
+    /* hsdram1.Init */
+    hsdram1.Init.SDBank = FMC_SDRAM_BANK2;
+    hsdram1.Init.ColumnBitsNumber = FMC_SDRAM_COLUMN_BITS_NUM_8;
+    hsdram1.Init.RowBitsNumber = FMC_SDRAM_ROW_BITS_NUM_12;
+    hsdram1.Init.MemoryDataWidth = FMC_SDRAM_MEM_BUS_WIDTH_16;
+    hsdram1.Init.InternalBankNumber = FMC_SDRAM_INTERN_BANKS_NUM_4;
+    hsdram1.Init.CASLatency = FMC_SDRAM_CAS_LATENCY_3;
+    hsdram1.Init.WriteProtection = FMC_SDRAM_WRITE_PROTECTION_DISABLE;
+    hsdram1.Init.SDClockPeriod = FMC_SDRAM_CLOCK_PERIOD_2;
+    hsdram1.Init.ReadBurst = FMC_SDRAM_RBURST_DISABLE;
+    hsdram1.Init.ReadPipeDelay = FMC_SDRAM_RPIPE_DELAY_1;
+    /* SdramTiming */
+    SdramTiming.LoadToActiveDelay = 2;
+    SdramTiming.ExitSelfRefreshDelay = 7;
+    SdramTiming.SelfRefreshTime = 4;
+    SdramTiming.RowCycleDelay = 6;
+    SdramTiming.WriteRecoveryTime = 2;
+    SdramTiming.RPDelay = 2;
+    SdramTiming.RCDDelay = 2;
+
+    if (HAL_SDRAM_Init(&hsdram1, &SdramTiming) != HAL_OK)
+    {
+        Error_Handler( );
+    }
+    else
+    {
+        __IO uint32_t tmpmrd =0;
+        FMC_SDRAM_CommandTypeDef Command;
+
+        /* Step 1:  Configure a clock configuration enable command */
+        Command.CommandMode             = FMC_SDRAM_CMD_CLK_ENABLE;
+        Command.CommandTarget           = FMC_SDRAM_CMD_TARGET_BANK2;
+        Command.AutoRefreshNumber       = 1;
+        Command.ModeRegisterDefinition  = 0;
+
+        /* Send the command */
+        HAL_SDRAM_SendCommand(&hsdram1, &Command, 0x1000);
+
+        /* Step 2: Insert 100 us minimum delay */ 
+        /* Inserted delay is equal to 1 ms due to systick time base unit (ms) */
+        HAL_Delay(100);
+
+        /* Step 3: Configure a PALL (precharge all) command */ 
+        Command.CommandMode             = FMC_SDRAM_CMD_PALL;
+        Command.CommandTarget           = FMC_SDRAM_CMD_TARGET_BANK2;
+        Command.AutoRefreshNumber       = 1;
+        Command.ModeRegisterDefinition  = 0;
+
+        /* Send the command */
+        HAL_SDRAM_SendCommand(&hsdram1, &Command, 0x1000);  
+
+        /* Step 4: Configure an Auto Refresh command */ 
+        Command.CommandMode             = FMC_SDRAM_CMD_AUTOREFRESH_MODE;
+        Command.CommandTarget           = FMC_SDRAM_CMD_TARGET_BANK2;
+        Command.AutoRefreshNumber       = 4;
+        Command.ModeRegisterDefinition  = 0;
+
+        /* Send the command */
+        HAL_SDRAM_SendCommand(&hsdram1, &Command, 0x1000);
+
+        /* Step 5: Program the external memory mode register */
+        tmpmrd = (uint32_t)SDRAM_MODEREG_BURST_LENGTH_1          |
+            SDRAM_MODEREG_BURST_TYPE_SEQUENTIAL   |
+            SDRAM_MODEREG_CAS_LATENCY_3           |
+            SDRAM_MODEREG_OPERATING_MODE_STANDARD |
+            SDRAM_MODEREG_WRITEBURST_MODE_SINGLE;
+
+        Command.CommandMode             = FMC_SDRAM_CMD_LOAD_MODE;
+        Command.CommandTarget           = FMC_SDRAM_CMD_TARGET_BANK2;
+        Command.AutoRefreshNumber       = 1;
+        Command.ModeRegisterDefinition  = tmpmrd;
+
+        /* Send the command */
+        HAL_SDRAM_SendCommand(&hsdram1, &Command, 0x1000);
+
+        /* Step 6: Set the refresh rate counter */
+        /**
+         * 
+         * Set the device refresh rate 
+         * 
+         *  refresh rate  = refresh period / number of rows
+         *  refresh rate  = 64ms / 4096 = 15.62us
+         *  refresh count = (refresh rate x SDRAM clock frequency) - 20
+         *  refresh count = 15.62us x 90MHz - 20 = 1385.xx
+         * 
+         */
+        HAL_SDRAM_ProgramRefreshRate(&hsdram1, 1386); 
+    }
+    /* USER CODE END FMC_Init 2 */
+}
+
 /**
  * @brief GPIO Initialization Function
  * @param None
@@ -493,8 +617,9 @@ static void MX_GPIO_Init(void)
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_GPIOD_CLK_ENABLE();
     __HAL_RCC_GPIOG_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
 
     /*Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(LCD_CSX_GPIO_Port, LCD_CSX_Pin, GPIO_PIN_RESET);
