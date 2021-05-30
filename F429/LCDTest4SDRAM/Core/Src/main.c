@@ -22,6 +22,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <string.h>
+
+#include "extlib/stm32f429i_discovery_ts.h"
+#include "extlib/stm32f429i_discovery_lcd.h"
 
 /* USER CODE END Includes */
 
@@ -53,7 +58,7 @@ SPI_HandleTypeDef hspi5;
 UART_HandleTypeDef huart5;
 
 /* USER CODE BEGIN PV */
-
+static uint8_t frame_buffer[153600/*240*320*2*/];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +76,39 @@ static void MX_DMA2D_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int __io_putchar(int ch)
+{
+    if(HAL_UART_Transmit(&huart5, (uint8_t *)&ch, 1, 10) != HAL_OK)
+        return -1;
+    return ch;
+}
+
+static uint16_t x, y;
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin  == LCD_TS_INT1_Pin)
+    {
+        TS_StateTypeDef tp_state;
+        BSP_TS_GetState(&tp_state);
+        if(x != tp_state.X || y != tp_state.Y)
+        {
+            char buf[32] = {0, };
+
+            if(tp_state.X > 240) tp_state.X = 240;
+            if(tp_state.Y > 320) tp_state.Y = 320;
+
+            sprintf(buf, "x = %d, y = %d", tp_state.X, tp_state.Y);
+            // printf("%s\r\n", buf);
+            BSP_LCD_Clear(LCD_COLOR_WHITE);
+
+            BSP_LCD_SetFont(&Font20);
+            BSP_LCD_DisplayStringAt(0, 120, (uint8_t *)buf, CENTER_MODE);
+            x = tp_state.X;
+            y = tp_state.Y;
+        }
+        BSP_TS_ITClear();
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -109,6 +147,20 @@ int main(void)
     MX_LTDC_Init();
     MX_DMA2D_Init();
     /* USER CODE BEGIN 2 */
+    BSP_LCD_Init(hltdc, hdma2d);
+    BSP_LCD_LayerDefaultInit(LCD_BACKGROUND_LAYER, (uint32_t)frame_buffer);
+    BSP_LCD_SelectLayer(LCD_BACKGROUND_LAYER);
+    BSP_LCD_DisplayOn();
+    BSP_LCD_Clear(LCD_COLOR_WHITE);
+
+    BSP_LCD_SetBackColor(RGB_LCD_COLOR_WHITE);
+    BSP_LCD_SetTextColor(RGB_LCD_COLOR_BLACK);
+    BSP_LCD_SetFont(&LCD_DEFAULT_FONT);
+    BSP_LCD_DisplayStringAt(0, 150, (uint8_t *)"LCD Test1", CENTER_MODE);
+    BSP_LCD_DisplayStringAt(0, 180, (uint8_t *)"LCD Test2", CENTER_MODE);
+
+    BSP_TS_Init(240, 320);
+    BSP_TS_ITConfig();
 
     /* USER CODE END 2 */
 
