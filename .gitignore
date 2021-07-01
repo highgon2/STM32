@@ -5,3 +5,4 @@ Release/
 __pycache__/
 **/.vscode/settings.json
 Reference/
+**/*.launch
