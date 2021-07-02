@@ -112,14 +112,12 @@ static int can_tx_eec1(void)
     uint32_t pgn      = 0xF004 << 8 ;   // Skipped EDP & DP 2bit
     uint32_t src_addr = 0x0;
     uint32_t ext_id   = priority | pgn | src_addr;
-    uint16_t engine_speed = adc_val / 0.125;
-    
 
     eec1.engine_torque_mode                      = 14;
     eec1.actual_engine_percent_torque_fractional = 0;
     eec1.driver_demand_engine_percent_torque     = 254;
     eec1.actual_engine_percent_torque            = 125;
-    eec1.engine_speed                            = engine_speed;
+    eec1.engine_speed                            = adc_val / 0.125;
     eec1.source_address_of_ctrl_dev              = 187;
     eec1.engine_start_mode                       = 4;
     eec1.reserved6_b0                            = 0;
@@ -192,10 +190,11 @@ int main(void)
     /* USER CODE BEGIN WHILE */
     while (1)
     {
-        /* USER CODE END WHILE */
         // uint16_t voltage = adc_val * 0.806; // mV
         // printf("adc_value = %4d, volate = %d.%d\r\n", adc_val, (voltage/1000), (voltage%1000));
         HAL_Delay(10);
+        /* USER CODE END WHILE */
+
         /* USER CODE BEGIN 3 */
     }
     /* USER CODE END 3 */
@@ -272,7 +271,7 @@ static void MX_ADC1_Init(void)
     hadc1.Instance = ADC1;
     hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
     hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-    hadc1.Init.ScanConvMode = ENABLE;
+    hadc1.Init.ScanConvMode = DISABLE;
     hadc1.Init.ContinuousConvMode = ENABLE;
     hadc1.Init.DiscontinuousConvMode = DISABLE;
     hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
