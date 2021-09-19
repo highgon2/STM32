@@ -18,351 +18,238 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <stdio.h>
-#include <string.h>
-
 #include "main.h"
 
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
+
 UART_HandleTypeDef huart5;
+
+/* USER CODE BEGIN PV */
+
+/* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_UART5_Init(void);
+/* USER CODE BEGIN PFP */
 
-static int set_can_filter(uint8_t filter_index, uint32_t filter_id, uint32_t filter_mask)
-{
-    uint32_t          id      = filter_id   << 3;
-    uint32_t          mask    = filter_mask << 3;
-    CAN_FilterTypeDef filter;
+/* USER CODE END PFP */
 
-    filter.FilterIdHigh         = (id & 0xFFFF0000) >> 16;
-    filter.FilterIdLow          = id  & 0x0000FFF8;
-    filter.FilterMaskIdHigh     = (mask & 0xFFFF0000) >> 16;
-    filter.FilterMaskIdLow      = mask  & 0x0000FFF8;
-    filter.FilterScale          = CAN_FILTERSCALE_32BIT;
-    filter.FilterMode           = CAN_FILTERMODE_IDMASK;
-    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
-    filter.FilterBank           = filter_index;
-    filter.FilterActivation     = ENABLE;
-    filter.SlaveStartFilterBank = 14;
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 
-    if(HAL_CAN_ConfigFilter(&hcan1, &filter) != HAL_OK)
-    {
-        printf("ERROR ::%s() : filter_index = %d, filter_id = 0x%lx, filter_mask = 0x%lx\r\n", __func__, filter_index, filter_id, filter_mask);
-        return -1;
-    }
+/* USER CODE END 0 */
 
-    return 0;
-}
-
-int __io_putchar(int ch)
-{
-    if(HAL_UART_Transmit(&huart5, (uint8_t *)&ch, 1, 10) != HAL_OK)
-        return -1;
-
-    return ch;
-}
-
-#define J1939_EC1         0x18FEE300
-#define J1939_DM1         0x18FECA00
-#define J1939_BAM_CM      0x00EC0000
-#define J1939_BAM_DT      0x00EB0000
-#define MAX_BAM_LENGTH    1785
-
-typedef struct _bam_t
-{
-    uint32_t pgn;
-    uint16_t length;
-    uint8_t  num_of_packet;
-
-    uint16_t index;
-    uint8_t  message[MAX_BAM_LENGTH];
-}BAM_t;
-
-BAM_t bam;
-uint8_t read_data[8];
-CAN_RxHeaderTypeDef rx_header;
-
-int j1939_parser_bam(uint32_t ext_id, uint8_t *data)
-{
-    uint32_t bam_id = ext_id & 0x00FF0000;
-
-    if(bam_id == J1939_BAM_CM)
-    {
-        if(data[0] != 0x20)
-        {
-            printf("INFO :: %s() : invalid sync byte : data[0] = 0x%02x\r\n", __func__, data[0]);
-            return -1;
-        }
-
-        if(bam.pgn != 0)
-        {
-            printf("INFO :: %s() : already received BAM_CM : pgn = 0x%04lx\r\n", __func__, bam.pgn);
-            return -1;
-        }
-
-        memset(&bam, 0x00, sizeof(BAM_t));
-        bam.length        = data[2] << 8  | data[1];
-        bam.num_of_packet = data[3];
-        bam.pgn           = data[7] << 16 | data[6] << 8 | data[5];
-    }
-    else if(bam_id == J1939_BAM_DT)
-    {
-        if(bam.index < bam.length)
-        {
-            if((data[0] * 7) < bam.length)
-            {
-                memcpy(&bam.message[bam.index], &data[1], 7);
-                bam.index += 7;
-            }
-            else
-            {
-                for(int i = 0 ; i < 7 ; i++)
-                {
-                    if(bam.index < bam.length)
-                        bam.message[bam.index++] = data[1+i];
-                }
-            }
-
-            if(bam.index == bam.length)
-            {
-                uint32_t pgn = bam.pgn << 8;
-
-                if((pgn & J1939_DM1) == pgn)
-                {
-                    printf("DM1 Message : length = %d -----------------------\r\n", bam.length);
-                    for(int i = 0 ; i < bam.length ; i++)
-                    {
-                        printf("0x%02X, ", bam.message[i]);
-                        if((i%0x08) == 0x07) printf("\r\n");
-                    }
-                    if((bam.length % 0x08) != 0) printf("\r\n");
-                    printf("-------------------------------------------------\r\n");
-                }
-                else if((pgn & J1939_EC1) == pgn)
-                {
-                    printf("EC1 Message : length = %d -----------------------\r\n", bam.length);
-                    for(int i = 0 ; i < bam.length ; i++)
-                    {
-                        printf("0x%02X, ", bam.message[i]);
-                        if((i%0x08) == 0x07) printf("\r\n");
-                    }
-                    if((bam.length % 0x08) != 0) printf("\r\n");
-                    printf("-------------------------------------------------\r\n");
-                }
-                else
-                {
-                    printf("Warning :: %s() : pgn = 0x%08lx\r\n", __func__, pgn);
-                }
-                memset(&bam, 0x00, sizeof(BAM_t));
-            }
-        }
-    }
-    else
-    {
-        return -1;
-    }
-
-    return 0;
-}
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
-{
-    if(hcan->Instance == CAN1)
-    {
-        uint32_t filter_mask;
-        HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, read_data);
-
-        HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rx_header, read_data);
-        filter_mask = rx_header.ExtId & 0x00FF0000;
-        switch(filter_mask)
-        {
-            case 0x00EB0000:
-            case 0x00EC0000:
-                j1939_parser_bam(rx_header.ExtId, read_data);
-                break;
-
-            case 0x00F00000:
-            case 0x00FD0000:
-            case 0x00FE0000:
-            case 0x00FF0000:
-                printf("CAN_ID = 0x%08lX, Data = [", rx_header.ExtId);
-                for(int i = 0 ; i < 8 ; i++) printf("0x%02X, ", read_data[i]);
-                printf("\b\b]\r\n");
-                break;
-
-            default:
-                printf("unknown data :: CAN_ID = 0x%08lx, filter_mask = 0x%08lx\r\n", rx_header.ExtId, filter_mask);
-                break;
-        }
-    }
-}
-
-
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
-    HAL_Init();
-    SystemClock_Config();
+  /* USER CODE BEGIN 1 */
 
-    MX_GPIO_Init();
-    MX_CAN1_Init();
-    MX_UART5_Init();
+  /* USER CODE END 1 */
 
-    HAL_CAN_Start(&hcan1);
-    while (1)
-    {
-        HAL_Delay(10);
-    }
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_CAN1_Init();
+  MX_UART5_Init();
+  /* USER CODE BEGIN 2 */
+
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-    /** Configure the main internal regulator output voltage
-    */
-    __HAL_RCC_PWR_CLK_ENABLE();
-    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-    /** Initializes the RCC Oscillators according to the specified parameters
-     * in the RCC_OscInitTypeDef structure.
-     */
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-    RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-    RCC_OscInitStruct.PLL.PLLM = 4;
-    RCC_OscInitStruct.PLL.PLLN = 180;
-    RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-    RCC_OscInitStruct.PLL.PLLQ = 4;
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /** Activate the Over-Drive mode
-    */
-    if (HAL_PWREx_EnableOverDrive() != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /** Initializes the CPU, AHB and APB buses clocks
-    */
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-        |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  /** Configure the main internal regulator output voltage
+  */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 180;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Activate the Over-Drive mode
+  */
+  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
- * @brief CAN1 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief CAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_CAN1_Init(void)
 {
-    int result = 0;
 
-    hcan1.Instance = CAN1;
-    hcan1.Init.Mode = CAN_MODE_NORMAL;
-    hcan1.Init.Prescaler = 9;
-    hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-    hcan1.Init.TimeSeg1 = CAN_BS1_16TQ;
-    hcan1.Init.TimeSeg2 = CAN_BS2_3TQ;
-    hcan1.Init.TimeTriggeredMode = DISABLE;
-    hcan1.Init.AutoBusOff = DISABLE;
-    hcan1.Init.AutoWakeUp = DISABLE;
-    hcan1.Init.AutoRetransmission = DISABLE;
-    hcan1.Init.ReceiveFifoLocked = DISABLE;
-    hcan1.Init.TransmitFifoPriority = DISABLE;
-    if (HAL_CAN_Init(&hcan1) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /* USER CODE BEGIN CAN1_Init 0 */
 
-    result |= set_can_filter(0, 0x00F00000, 0x00FFF800);    /* 0x00F00x00 : EEC1, EEC2 */
-    result |= set_can_filter(1, 0x00FD0000, 0x00FF0000);    /* 0x00FDxx00 : AT1S1, DLCC1, DPFC1, ECUID, EOI */
-    result |= set_can_filter(2, 0x00FE0000, 0x00FF0000);    /* 0x00FExx00 : AMB, AT1T1I, CCVS1, DM1, EC1, EEC3, EPLP1, EPLP2, ET1, ET2, HOURS, IC1, LFC, IO, SHUTDN, TCI2 */
-    result |= set_can_filter(3, 0x00FF4800, 0x00FFF800);    /* 0x00FF4x00 : E2M4A, E2M4C */
-    result |= set_can_filter(4, 0x00E80000, 0x00F80000);    /* 0x00Exxx00 : EB00, EC00 */
-    result |= HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
-    if(result != 0)
-    {
-        printf("ERROR :: %s() : set_can_filter() fail\r\n", __func__);
-        Error_Handler();
-    }
+  /* USER CODE END CAN1_Init 0 */
+
+  /* USER CODE BEGIN CAN1_Init 1 */
+
+  /* USER CODE END CAN1_Init 1 */
+  hcan1.Instance = CAN1;
+  hcan1.Init.Prescaler = 9;
+  hcan1.Init.Mode = CAN_MODE_NORMAL;
+  hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_16TQ;
+  hcan1.Init.TimeSeg2 = CAN_BS2_3TQ;
+  hcan1.Init.TimeTriggeredMode = DISABLE;
+  hcan1.Init.AutoBusOff = DISABLE;
+  hcan1.Init.AutoWakeUp = DISABLE;
+  hcan1.Init.AutoRetransmission = DISABLE;
+  hcan1.Init.ReceiveFifoLocked = DISABLE;
+  hcan1.Init.TransmitFifoPriority = DISABLE;
+  if (HAL_CAN_Init(&hcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CAN1_Init 2 */
+
+  /* USER CODE END CAN1_Init 2 */
+
 }
 
 /**
- * @brief UART5 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief UART5 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_UART5_Init(void)
 {
 
-    /* USER CODE BEGIN UART5_Init 0 */
+  /* USER CODE BEGIN UART5_Init 0 */
 
-    /* USER CODE END UART5_Init 0 */
+  /* USER CODE END UART5_Init 0 */
 
-    /* USER CODE BEGIN UART5_Init 1 */
+  /* USER CODE BEGIN UART5_Init 1 */
 
-    /* USER CODE END UART5_Init 1 */
-    huart5.Instance = UART5;
-    huart5.Init.BaudRate = 115200;
-    huart5.Init.WordLength = UART_WORDLENGTH_8B;
-    huart5.Init.StopBits = UART_STOPBITS_1;
-    huart5.Init.Parity = UART_PARITY_NONE;
-    huart5.Init.Mode = UART_MODE_TX_RX;
-    huart5.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-    huart5.Init.OverSampling = UART_OVERSAMPLING_16;
-    if (HAL_UART_Init(&huart5) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /* USER CODE BEGIN UART5_Init 2 */
+  /* USER CODE END UART5_Init 1 */
+  huart5.Instance = UART5;
+  huart5.Init.BaudRate = 115200;
+  huart5.Init.WordLength = UART_WORDLENGTH_8B;
+  huart5.Init.StopBits = UART_STOPBITS_1;
+  huart5.Init.Parity = UART_PARITY_NONE;
+  huart5.Init.Mode = UART_MODE_TX_RX;
+  huart5.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart5.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN UART5_Init 2 */
 
-    /* USER CODE END UART5_Init 2 */
+  /* USER CODE END UART5_Init 2 */
 
 }
 
 /**
- * @brief GPIO Initialization Function
- * @param None
- * @retval None
- */
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_GPIO_Init(void)
 {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-    /* GPIO Ports Clock Enable */
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    __HAL_RCC_GPIOH_CLK_ENABLE();
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOD_CLK_ENABLE();
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
-    /*Configure GPIO pin : PA0 */
-    GPIO_InitStruct.Pin = GPIO_PIN_0;
-    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /*Configure GPIO pin : PA0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    /* EXTI interrupt init*/
-    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
 }
 
@@ -371,34 +258,34 @@ static void MX_GPIO_Init(void)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
-    /* USER CODE BEGIN Error_Handler_Debug */
+  /* USER CODE BEGIN Error_Handler_Debug */
     /* User can add his own implementation to report the HAL error return state */
     __disable_irq();
     while (1)
     {
     }
-    /* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-    /* USER CODE BEGIN 6 */
+  /* USER CODE BEGIN 6 */
     /* User can add his own implementation to report the file name and line number,
 ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-    /* USER CODE END 6 */
+  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
 

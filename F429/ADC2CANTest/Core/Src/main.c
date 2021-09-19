@@ -179,7 +179,6 @@ int main(void)
     MX_UART5_Init();
     MX_ADC1_Init();
     MX_TIM7_Init();
-    
     /* USER CODE BEGIN 2 */
     HAL_CAN_Start(&hcan1);
     HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&adc_val, 1);
