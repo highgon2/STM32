@@ -2,7 +2,7 @@
 .settings/
 Debug/
 Release/
-__pycache__/
 **/.vscode/settings.json
 Reference/
 **/*.launch
+**/.DS_Store
