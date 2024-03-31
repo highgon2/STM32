@@ -1,0 +1,3 @@
+[submodule "G474/LVGL/Core/Src/extlib/lvgl"]
+	path = G474/LVGL/Core/Src/extlib/lvgl
+	url = git@github.com:lvgl/lvgl.git
