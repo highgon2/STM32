@@ -80,6 +80,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
 }
 
+#include "small.h"
+#include "small_lvgl.h"
 #include "lvgl/src/drivers/display/st7789/lv_st7789.h"
 #include "lvgl/demos/lv_demos.h"
 
@@ -125,6 +127,8 @@ static void lcd_send_color(lv_display_t *disp, const uint8_t *cmd, size_t cmd_si
   {
     while(param_size > 0) {
       uint16_t length = param_size > SPI_MAX_BUF ? SPI_MAX_BUF : param_size;
+
+      lv_draw_sw_rgb565_swap(param, length/2);
       for (int i = 0 ; i < length ; i++) send_data[i] = (0x01 << 8) | param[i];
       HAL_SPI_Transmit(&hspi2, (uint8_t *)send_data, length, BUS_SPI1_POLL_TIMEOUT);
       param += length;
@@ -217,7 +221,10 @@ int main(void)
   }
   lv_display_set_buffers(lcd_disp, buf1, buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
   // lv_demo_widgets();
-  rgb_color();
+  // rgb_color();
+  lv_obj_t* img = lv_image_create(lv_screen_active());
+  lv_image_set_src(img, &small_lvgl);
+  lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
   /* USER CODE END 2 */
 
   /* Infinite loop */
